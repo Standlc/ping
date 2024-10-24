@@ -178,22 +178,17 @@ ssize_t read_echo_reply(int socket_fd, struct msghdr *msg) {
 }
 
 struct timeval get_reply_timestamps(struct msghdr *msg) {
-    int has_timestamps = 0;
     struct timeval recv_time;
     struct cmsghdr *cmsg = NULL;
 
     for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = CMSG_NXTHDR(msg, cmsg)) {
-        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMP && cmsg->cmsg_len == CMSG_LEN(sizeof(struct timeval))) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMP && cmsg->cmsg_len == CMSG_LEN(sizeof(recv_time))) {
             memcpy(&recv_time, CMSG_DATA(cmsg), sizeof(recv_time));
-            has_timestamps = 1;
+            return recv_time;
         }
     }
-    if (!has_timestamps) {
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        recv_time = now;
-    }
 
+    gettimeofday(&recv_time, NULL);
     return recv_time;
 }
 
@@ -332,11 +327,9 @@ int process_echo_reply(int echo_id, struct msghdr *msg, int msg_size, struct pin
     }
 
     struct timeval *msg_tval = (void *)echo_reply->icmp_data;
-    char *msg_ip_address = inet_ntoa(ipheader->ip_src);
-
     struct timeval recv_time = get_reply_timestamps(msg);
     double rtt_usec = (recv_time.tv_sec - msg_tval->tv_sec) * 1000 * 1000 + (recv_time.tv_usec - msg_tval->tv_usec);
-    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", msg_size - ip_header_len, msg_ip_address, echo_reply->icmp_seq, ipheader->ip_ttl, rtt_usec / 1000);
+    printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms\n", msg_size - ip_header_len, inet_ntoa(ipheader->ip_src), echo_reply->icmp_seq, ipheader->ip_ttl, rtt_usec / 1000);
 
     stats->replies_count++;
     double rtt_ms = rtt_usec / 1000;
